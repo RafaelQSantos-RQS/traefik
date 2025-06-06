@@ -1,3 +1,4 @@
+# docker-compose.yml
 name: ${PROJECT_NAME:-minio}
 
 networks:
@@ -9,13 +10,24 @@ services:
   traefik:
     image: traefik:${TRAEFIK_VERSION:-latest}
     container_name: traefik_proxy
+    restart: always
     command:
       - "--configFile=/etc/traefik/traefik.yml"
     ports:
       - "80:80"
-      - "8080:8080"
+      - "8080:8080" # Dashboard
+      - "443:443"
     networks:
       - web
     volumes:
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/etc/traefik/certs:ro"
+    labels:
+      - traefik.enable=true
+
+      # --- Router for Dashboard (Acessível via HTTPS) ---
+      - traefik.http.routers.dashboard.rule=Host(`dashboard-traefik.localhost.com`)
+      - traefik.http.routers.dashboard.entrypoints=websecure
+      - traefik.http.routers.dashboard.tls=true
+      - traefik.http.routers.dashboard.service=api@internal
