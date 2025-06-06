@@ -1,0 +1,21 @@
+name: ${PROJECT_NAME:-minio}
+
+networks:
+  web:
+    name: web
+    external: true
+
+services:
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-latest}
+    container_name: traefik_proxy
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    networks:
+      - web
+    volumes:
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"

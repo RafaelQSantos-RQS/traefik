@@ -1,0 +1,13 @@
+# traefik.yml
+
+api: # API and Dashboard configuration
+  insecure: true
+  dashboard: true
+
+entryPoints: # Defines the entry points for traffic
+  web:
+    address: ":80"
+
+providers: # Enable Docker as a configuration provider
+  docker:
+    exposedByDefault: false
