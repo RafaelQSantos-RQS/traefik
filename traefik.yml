@@ -1,13 +1,27 @@
 # traefik.yml
-
-api: # API and Dashboard configuration
+api:
   insecure: true
   dashboard: true
 
-entryPoints: # Defines the entry points for traffic
+entryPoints:
   web:
     address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
 
-providers: # Enable Docker as a configuration provider
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: "/etc/traefik/certs/_wildcard.localhost.com+2.pem"
+        keyFile: "/etc/traefik/certs/_wildcard.localhost.com+2-key.pem"
+
+providers:
   docker:
     exposedByDefault: false
