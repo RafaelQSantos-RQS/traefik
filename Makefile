@@ -7,6 +7,7 @@ endif
 
 ENV_FILE=.env
 ENV_FILE_TEMPLATE=.env.template
+CONFIG_FOLDER = ./config
 
 # Environment variables
 EXTERNAL_DOCKER_NETWORK ?= web
@@ -28,15 +29,19 @@ setup: ## Prepare environment for docker-compose
 		echo "Nothing will be done..." ; \
 	fi
 
+	@echo "Creating config folder $(CONFIG_FOLDER)"
+	@mkdir -p $(CONFIG_FOLDER)
+	@echo "Config folder $(CONFIG_FOLDER) is ready"
+
 	@echo "Creating Traefik static config from template..."
-	@if [ ! -f traefik.yaml ]; then \
-	cp templates/traefik.yaml.template traefik.yaml; \
+	@if [ ! -f $$CONFIG_FOLDER/traefik.yaml ]; then \
+	cp templates/traefik.yaml.template $$CONFIG_FOLDER/traefik.yaml; \
 	echo "Traefik static configuration created. Please review traefik.yaml."; \
 	fi
 
 	@echo "Creating Traefik dynamic config from template..."
-	@if [ ! -f dynamic.yaml ]; then \
-	cp templates/dynamic.yaml.template dynamic.yaml; \
+	@if [ ! -f $$CONFIG_FOLDER/dynamic.yaml ]; then \
+	cp templates/dynamic.yaml.template $$CONFIG_FOLDER/dynamic.yaml; \
 	echo "Traefik dynamic configuration created. Please review dynamic.yaml."; \
 	fi
 
@@ -49,6 +54,17 @@ setup: ## Prepare environment for docker-compose
 	@touch $$ACME_FILE
 	@chmod 600 $$ACME_FILE
 	@echo "Folder $(LE_DIR) and file $(ACME_FILE) are ready"
+
+generate-cert: ## Generate a wildcard self-signed certificate for local testing
+	@echo "Generating wildcard certificate for *.my-domain.com.br..."
+	@mkdir -p ./letsencrypt
+	@openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+		-keyout ./letsencrypt/wildcard.key \
+		-out ./letsencrypt/wildcard.crt \
+		-subj "/CN=*.my-domain.com.br" \
+		-addext "subjectAltName = DNS:*.my-domain.com.br,DNS:my-domain.com.br"
+	@chmod 600 ./letsencrypt/wildcard.key
+	@echo "Certificate and key created in ./letsencrypt/"
 
 validate: ## Validates environment and docker-compose configuration
 	@echo "==> Validating environment variables..."
