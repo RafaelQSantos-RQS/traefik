@@ -13,7 +13,21 @@ TRAEFIK_FILE   = $(CONFIG_FOLDER)/traefik.yaml
 
 .PHONY: setup up down restart logs ps pull help
 
-setup: ## 🛠️ Generate initial config files from templates
+setup: ## 🛠️ Generate environment and config files from templates
+	@if [ ! -f $(ENV_FILE) ]; then \
+		if [ -f $(ENV_TEMPLATE) ]; then \
+			echo "==> Generating $(ENV_FILE) from template"; \
+			cp $(ENV_TEMPLATE) $(ENV_FILE); \
+			echo "==> $(ENV_FILE) generated"; \
+			echo "⚠️ Please edit $(ENV_FILE) before starting the containers"; \
+			echo "⚠️ Run 'make up' to start the containers"; \
+		else \
+			echo "⚠️ No $(ENV_TEMPLATE) found, skipping .env generation"; \
+		fi \
+	else \
+		echo "==> $(ENV_FILE) already exists, skipping"; \
+	fi
+
 	@echo "==> Creating folder $(CONFIG_FOLDER)"
 	@mkdir -p $(CONFIG_FOLDER)
 
