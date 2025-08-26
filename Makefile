@@ -101,8 +101,10 @@ sync: ## Synchronize local repository with remote (force, overwrites local chang
 	@echo "Repository is now synchronized with remote."
 
 help: ## Shows this help message.
-	@echo "Available commands:"
-	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@echo "\033[1;33mAvailable commands:\033[0m"
+	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort \
+	| awk 'BEGIN {FS = ":.*?## "}; \
+	{printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 %: # Generic target to catch unknown commands.
 	@echo "\033[31mError: Target '$(@)' not found.\033[0m"
