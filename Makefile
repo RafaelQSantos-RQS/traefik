@@ -28,6 +28,18 @@ setup: ## Prepare environment for docker-compose
 		echo "Nothing will be done..." ; \
 	fi
 
+	@echo "Creating Traefik static config from template..."
+	@if [ ! -f traefik.yaml ]; then \
+	cp templates/traefik.yaml.template traefik.yaml; \
+	echo "Traefik static configuration created. Please review traefik.yaml."; \
+	fi
+
+	@echo "Creating Traefik dynamic config from template..."
+	@if [ ! -f dynamic.yaml ]; then \
+	cp templates/dynamic.yaml.template dynamic.yaml; \
+	echo "Traefik dynamic configuration created. Please review dynamic.yaml."; \
+	fi
+
 	@echo "Creating docker network $(EXTERNAL_DOCKER_NETWORK)"
 	@docker network inspect $$EXTERNAL_DOCKER_NETWORK >/dev/null 2>&1 || docker network create $$EXTERNAL_DOCKER_NETWORK
 	@echo "Docker network $(EXTERNAL_DOCKER_NETWORK) is ready"
