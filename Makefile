@@ -52,6 +52,12 @@ setup: ## 🛠️ Generate environment and config files from templates
 
 	@echo "✅ Environment and config files generated at $(ENV_FILE), $(TRAEFIK_FILE) and $(DYNAMIC_FILE)"
 
+sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
+	@echo "==> Syncing with the remote repository (origin/main)..."
+	@git fetch origin
+	@git reset --hard origin/main
+	@echo "Sync completed. Directory is clean and up-to-date."
+
 up: setup ## 🚀 Start containers
 	@$(COMPOSE) --env-file $(ENV_FILE) up -d --remove-orphans
 
