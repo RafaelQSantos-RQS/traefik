@@ -47,7 +47,7 @@ O processo é automatizado para minimizar erros. Siga os passos na ordem correta
 ### 1\. Clone o Repositório
 
 ```bash
-git clone <URL_DO_SEU_REPOSITORIO>
+git clone https://github.com/RafaelQSantos-RQS/traefik
 cd traefik
 ```
 
