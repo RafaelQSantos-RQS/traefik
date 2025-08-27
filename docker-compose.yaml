@@ -1,0 +1,45 @@
+networks:
+  web:
+    external: true
+    name: ${EXTERNAL_DOCKER_NETWORK}
+
+services:
+  proxy:
+    image: traefik:${TRAEFIK_VERSION}
+    restart: always
+    env_file:
+      - .env
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/traefik.yaml:/etc/traefik/traefik.yaml
+      - ./config/dynamic.yaml:/etc/traefik/dynamic.yaml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CERTS_DIR}:/etc/traefik/certs
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+
+      ## Dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.middlewares=basic-auth@file"
+
+      ## Metrics
+      - "traefik.http.routers.metrics.rule=Host(`${TRAEFIK_HOST}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.metrics.entrypoints=websecure"
+      - "traefik.http.routers.metrics.service=prometheus@internal"
+      - "traefik.http.routers.metrics.tls=true"
+      - "traefik.http.routers.metrics.middlewares=basic-auth@file"
