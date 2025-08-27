@@ -19,6 +19,8 @@ setup: ## 🛠️ Generate environment and config files from templates
 		if [ -f $(ENV_TEMPLATE) ]; then \
 			echo "==> Generating $(ENV_FILE) from template"; \
 			cp $(ENV_TEMPLATE) $(ENV_FILE); \
+			HOSTNAME_CMD=$$(hostname -s); \
+			sed -i "s|TRAEFIK_HOST=<HOSTNAME>.|TRAEFIK_HOST=$${HOSTNAME_CMD}.|" $(ENV_FILE); \
 			echo "⚠️ Please edit $(ENV_FILE) and run 'make setup' again"; \
 			exit 1; \
 		else \
@@ -46,7 +48,9 @@ setup: ## 🛠️ Generate environment and config files from templates
 	fi
 	@DASH_PASS_HASH=$$(htpasswd -nbm $$DASH_USER $$DASH_PASS | cut -d":" -f2); \
 		DASH_USER=$$DASH_USER DASH_PASS_HASH=$$DASH_PASS_HASH envsubst < templates/dynamic.yaml.template > $(DYNAMIC_FILE); \
-		echo "✅ dynamic.yaml generated at $(DYNAMIC_FILE)"; \
+		echo "✅ dynamic.yaml generated at $(DYNAMIC_FILE)";
+
+	@echo "✅ Environment and config files generated at $(ENV_FILE), $(TRAEFIK_FILE) and $(DYNAMIC_FILE)"
 
 up: setup ## 🚀 Start containers
 	@$(COMPOSE) --env-file $(ENV_FILE) up -d --remove-orphans
