@@ -41,15 +41,18 @@ setup: ## 🛠️ Generate environment and config files from templates
 		echo "==> $(TRAEFIK_FILE) already exists, skipping"; \
 	fi
 
-	@echo "==> Generating dynamic.yaml from template with hashed credentials"
-	@if [ -z "$$DASH_USER" ] || [ -z "$$DASH_PASS" ]; then \
-		echo "❌ DASH_USER or DASH_PASS not set in $(ENV_FILE). Please configure and run 'make setup' again."; \
-		exit 1; \
-	fi
-	@DASH_PASS_HASH=$$(htpasswd -nbm $$DASH_USER $$DASH_PASS | cut -d":" -f2); \
+	@if [ ! -f $(DYNAMIC_FILE) ]; then \
+		echo "==> Generating dynamic.yaml from template with hashed credentials"; \
+		if [ -z "$$DASH_USER" ] || [ -z "$$DASH_PASS" ]; then \
+			echo "❌ DASH_USER or DASH_PASS not set in $(ENV_FILE). Please configure and run 'make setup' again."; \
+			exit 1; \
+		fi; \
+		DASH_PASS_HASH=$$(htpasswd -nbm $$DASH_USER $$DASH_PASS | cut -d":" -f2); \
 		DASH_USER=$$DASH_USER DASH_PASS_HASH=$$DASH_PASS_HASH envsubst < templates/dynamic.yaml.template > $(DYNAMIC_FILE); \
-		echo "✅ dynamic.yaml generated at $(DYNAMIC_FILE)";
-
+		echo "✅ New dynamic.yaml generated at $(DYNAMIC_FILE)"; \
+	else \
+		echo "==> $(DYNAMIC_FILE) already exists, skipping"; \
+	fi
 	@echo "✅ Environment and config files generated at $(ENV_FILE), $(TRAEFIK_FILE) and $(DYNAMIC_FILE)"
 
 sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
