@@ -1,6 +1,11 @@
 entryPoints:
   web:
     address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
   websecure:
     address: ":443"
 
@@ -9,12 +14,29 @@ providers:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
 
-certificatesResolvers:
-  le:
-    acme:
-      email: ${LE_EMAIL}
-      storage: ${ACME_FILE}
-      tlsChallenge: true
+  file:
+    filename: "/etc/traefik/dynamic.yaml"
+    watch: true
 
 api:
   dashboard: true
+  debug: false
+  disabledashboardad: false
+  insecure: false
+
+ping:
+  entryPoint: web
+  manualRouting: false
+  terminatingStatusCode: 503
+
+metrics:
+  prometheus:
+    buckets:
+      - 0.1
+      - 0.3
+      - 1.2
+      - 5.0
+
+log:
+  format: json
+  level: DEBUG
