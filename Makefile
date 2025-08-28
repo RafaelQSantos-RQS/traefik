@@ -9,10 +9,11 @@ COMPOSE        = docker compose
 ENV_FILE       = .env
 ENV_TEMPLATE   = .env.template
 CONFIG_FOLDER  = ./config
+EXTERNAL_DOCKER_NETWORK ?= web
 DYNAMIC_FILE   = $(CONFIG_FOLDER)/dynamic.yaml
 TRAEFIK_FILE   = $(CONFIG_FOLDER)/traefik.yaml
 
-.PHONY: setup up down restart logs status pull help clean
+.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync
 
 setup: ## 🛠️ Generate environment and config files from templates
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -53,7 +54,16 @@ setup: ## 🛠️ Generate environment and config files from templates
 	else \
 		echo "==> $(DYNAMIC_FILE) already exists, skipping"; \
 	fi
+
+	@$(MAKE) _create-network-if-not-exists
+
 	@echo "✅ Environment and config files generated at $(ENV_FILE), $(TRAEFIK_FILE) and $(DYNAMIC_FILE)"
+
+_create-network-if-not-exists:
+	@echo "==> Checking for network $(EXTERNAL_DOCKER_NETWORK)..."
+	@docker network inspect $(EXTERNAL_DOCKER_NETWORK) >/dev/null 2>&1 || \
+		(echo "==> Network $(EXTERNAL_DOCKER_NETWORK) not found. Creating..." && docker network create $(EXTERNAL_DOCKER_NETWORK))
+	@echo "✅ Network $(EXTERNAL_DOCKER_NETWORK) is ready."
 
 sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
 	@echo "==> Syncing with the remote repository (origin/main)..."
@@ -61,7 +71,7 @@ sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local
 	@git reset --hard origin/main
 	@echo "Sync completed. Directory is clean and up-to-date."
 
-up: setup ## 🚀 Start containers
+up: ## 🚀 Start containers
 	@$(COMPOSE) --env-file $(ENV_FILE) up -d --remove-orphans
 
 down: ## 🛑 Stop containers
