@@ -13,7 +13,7 @@ EXTERNAL_DOCKER_NETWORK ?= web
 DYNAMIC_FILE   = $(CONFIG_FOLDER)/dynamic.yaml
 TRAEFIK_FILE   = $(CONFIG_FOLDER)/traefik.yaml
 
-.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync
+.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync add-user update-user delete-user list-users
 
 setup: ## 🛠️ Generate environment and config files from templates
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -42,17 +42,16 @@ setup: ## 🛠️ Generate environment and config files from templates
 		echo "==> $(TRAEFIK_FILE) already exists, skipping"; \
 	fi
 
-	@if [ ! -f $(DYNAMIC_FILE) ]; then \
-		echo "==> Generating dynamic.yaml from template with hashed credentials"; \
+	@if [ ! -f $(CONFIG_FOLDER)/credentials ]; then \
+		echo "==> Generating credentials file"; \
 		if [ -z "$$DASH_USER" ] || [ -z "$$DASH_PASS" ]; then \
 			echo "❌ DASH_USER or DASH_PASS not set in $(ENV_FILE). Please configure and run 'make setup' again."; \
 			exit 1; \
 		fi; \
-		DASH_PASS_HASH=$$(htpasswd -nbm $$DASH_USER $$DASH_PASS | cut -d":" -f2); \
-		DASH_USER=$$DASH_USER DASH_PASS_HASH=$$DASH_PASS_HASH envsubst < templates/dynamic.yaml.template > $(DYNAMIC_FILE); \
-		echo "✅ New dynamic.yaml generated at $(DYNAMIC_FILE)"; \
+		htpasswd -nbm $$DASH_USER $$DASH_PASS > $(CONFIG_FOLDER)/credentials; \
+		echo "✅ New credentials file generated at $(CONFIG_FOLDER)/credentials"; \
 	else \
-		echo "==> $(DYNAMIC_FILE) already exists, skipping"; \
+		echo "==> $(CONFIG_FOLDER)/credentials already exists, skipping"; \
 	fi
 
 	@$(MAKE) _create-network-if-not-exists
@@ -88,7 +87,60 @@ status: ## 📊 Show container status
 pull: ## 📦 Pull the latest images
 	@$(COMPOSE) pull
 
+add-user: ## ➕ Add a new user to credentials file
+	@if [ -z "$(USERNAME)" ] || [ -z "$(PASS)" ]; then \
+		echo "❌ Usage: make add-user USERNAME=username PASS=password"; \
+		exit 1; \
+	fi
+	@echo "==> Adding user $(USERNAME) to credentials file"
+	@htpasswd -nbm $(USERNAME) $(PASS) | tr -d '\n' >> $(CONFIG_FOLDER)/credentials
+	@echo "" >> $(CONFIG_FOLDER)/credentials
+	@echo "✅ User $(USERNAME) added successfully"
+	@echo "⚠️ Restart Traefik to apply changes: make restart"
+
+update-user: ## 🔄 Update password for an existing user
+	@if [ -z "$(USERNAME)" ] || [ -z "$(PASS)" ]; then \
+		echo "❌ Usage: make update-user USERNAME=username PASS=newpassword"; \
+		exit 1; \
+	fi
+	@if ! grep -q "^$(USERNAME):" $(CONFIG_FOLDER)/credentials; then \
+		echo "❌ User $(USERNAME) not found"; \
+		exit 1; \
+	fi
+	@echo "==> Updating password for user $(USERNAME)"
+	@sed -i "/^$(USERNAME):/d" $(CONFIG_FOLDER)/credentials
+	@htpasswd -nbm $(USERNAME) $(PASS) | tr -d '\n' >> $(CONFIG_FOLDER)/credentials
+	@echo "" >> $(CONFIG_FOLDER)/credentials
+	@echo "✅ Password for user $(USERNAME) updated successfully"
+	@echo "⚠️ Restart Traefik to apply changes: make restart"
+
+delete-user: ## 🗑️ Delete a user from credentials file
+	@if [ -z "$(USERNAME)" ]; then \
+		echo "❌ Usage: make delete-user USERNAME=username"; \
+		exit 1; \
+	fi
+	@if ! grep -q "^$(USERNAME):" $(CONFIG_FOLDER)/credentials; then \
+		echo "❌ User $(USERNAME) not found"; \
+		exit 1; \
+	fi
+	@echo "==> Deleting user $(USERNAME)"
+	@sed -i "/^$(USERNAME):/d" $(CONFIG_FOLDER)/credentials
+	@echo "✅ User $(USERNAME) deleted successfully"
+	@echo "⚠️ Restart Traefik to apply changes: make restart"
+
+list-users: ## 👥 List all users in credentials file
+	@if [ ! -f $(CONFIG_FOLDER)/credentials ]; then \
+		echo "❌ Credentials file not found"; \
+		exit 1; \
+	fi
+	@echo "==> Users in credentials file:"
+	@cut -d: -f1 $(CONFIG_FOLDER)/credentials | grep -v '^$$' | sed 's/^/  - /'
+
 help: ## 🤔 Show this help message
-	@echo "\033[1;33mAvailable commands:\033[0m"
-	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort \
-	| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Traefik Management"
+	@echo "=================="
+	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort \
+	| sed 's/:.*## /: /' \
+	| awk 'BEGIN {FS = ": "}; {printf "  %-12s %s\n", $$1, $$2}'
+	@echo ""
