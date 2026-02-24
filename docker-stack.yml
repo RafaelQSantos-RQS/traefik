@@ -1,0 +1,72 @@
+x-environment: &environment
+  TRAEFIK_VERSION: ${TRAEFIK_VERSION:-v3.6.9}
+
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  web:
+    external: true
+    name: ${EXTERNAL_DOCKER_NETWORK:-traefik-web}
+
+services:
+  proxy:
+    image: traefik:${TRAEFIK_VERSION:-v3.6.9}
+    restart_policy: on-failure
+    env:
+      - <<: *environment
+    ports:
+      - target: 80
+        published: 80
+        protocol: tcp
+      - target: 443
+        published: 443
+        protocol: tcp
+    volumes:
+      - ./config/traefik-swarm.yaml:/etc/traefik/traefik.yaml:ro
+      - ./config/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      - ./config/credentials:/etc/traefik/secrets/credentials:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CERTS_DIR:-./certs}:/etc/traefik/certs:ro
+    networks:
+      - web
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.swarm.network=web"
+
+      ## Dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.middlewares=basic-auth@file"
+
+      ## Metrics
+      - "traefik.http.routers.metrics.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && PathPrefix(`/metrics`)"
+      - "traefik.http.routers.metrics.entrypoints=websecure"
+      - "traefik.http.routers.metrics.service=prometheus@internal"
+      - "traefik.http.routers.metrics.tls=true"
+      - "traefik.http.routers.metrics.middlewares=basic-auth@file"

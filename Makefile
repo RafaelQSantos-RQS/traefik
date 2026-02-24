@@ -13,7 +13,7 @@ EXTERNAL_DOCKER_NETWORK ?= web
 DYNAMIC_FILE   = $(CONFIG_FOLDER)/dynamic.yaml
 TRAEFIK_FILE   = $(CONFIG_FOLDER)/traefik.yaml
 
-.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync add-user update-user delete-user list-users
+.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync add-user update-user delete-user list-users deploy-stack remove-stack stack-status stack-logs
 
 setup: ## 🛠️ Generate environment and config files from templates
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -135,6 +135,22 @@ list-users: ## 👥 List all users in credentials file
 	fi
 	@echo "==> Users in credentials file:"
 	@cut -d: -f1 $(CONFIG_FOLDER)/credentials | grep -v '^$$' | sed 's/^/  - /'
+
+deploy-stack: ## 🐳 Deploy Traefik to Docker Swarm
+	@echo "==> Deploying Traefik to Swarm..."
+	@docker stack deploy -c docker-stack.yml traefik
+	@echo "✅ Traefik deployed to Swarm"
+
+remove-stack: ## 🗑️ Remove Traefik from Docker Swarm
+	@echo "==> Removing Traefik from Swarm..."
+	@docker stack rm traefik
+	@echo "✅ Traefik removed from Swarm"
+
+stack-status: ## 📊 Show Traefik stack status
+	@docker stack ps traefik
+
+stack-logs: ## 📜 Show Traefik Swarm logs
+	@docker stack logs -f traefik
 
 help: ## 🤔 Show this help message
 	@echo ""
