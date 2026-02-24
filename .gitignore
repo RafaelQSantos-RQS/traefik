@@ -5,4 +5,3 @@ certs/*
 
 config/*
 !config/README.md
-!config/traefik-swarm.yaml
