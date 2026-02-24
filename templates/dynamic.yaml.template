@@ -2,5 +2,25 @@ http:
   middlewares:
     basic-auth:
       basicAuth:
-        users:
-          - "$DASH_USER:$DASH_PASS_HASH"
+        usersFile: /etc/traefik/secrets/credentials
+
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s
+
+tls:
+  options:
+    default:
+      minVersion: "VersionTLS13"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+
+  certificates:
+    # Adicione seus certificados abaixo:
+    # - certFile: "/etc/traefik/certs/seu-dominio/cert.pem"
+    #   keyFile: "/etc/traefik/certs/seu-dominio/key.pem"

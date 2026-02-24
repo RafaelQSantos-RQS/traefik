@@ -39,4 +39,4 @@ metrics:
 
 log:
   format: json
-  level: DEBUG
+  level: INFO
