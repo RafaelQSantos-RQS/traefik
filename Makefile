@@ -306,7 +306,7 @@ swarm-status: ## 📊 Show Traefik stack status
 	@docker stack ps traefik
 
 swarm-logs: ## 📜 Show Traefik Swarm logs
-	@docker stack logs -f traefik
+	@docker service logs traefik_proxy -f
 
 sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
 	$(LOG) "Syncing with the remote repository (origin/main)..."
