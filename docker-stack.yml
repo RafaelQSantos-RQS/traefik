@@ -5,9 +5,8 @@ x-logging: &logging
     max-file: "3"
 
 networks:
-  web:
+  swarm-net:
     external: true
-    name: swarm-net
 
 services:
   proxy:
@@ -68,7 +67,7 @@ services:
         max_attempts: 3
     labels:
       - "traefik.enable=true"
-      - "traefik.swarm.network=web"
+      - "traefik.swarm.network=swarm-net"
 
       ## Dashboard
       - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
