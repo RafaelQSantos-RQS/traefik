@@ -1,9 +1,3 @@
-x-logging: &logging
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
-
 networks:
   swarm-net:
     external: true
@@ -34,19 +28,18 @@ services:
     secrets:
       - source: TRAEFIK_CREDENTIALS
         target: /etc/traefik/secrets/credentials
-      - source: TRAEFIK_SENAICIMATEC_CRT
+      - source: TRAEFIK_SENAI_CIMATEC_CRT
         target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.pem
-      - source: TRAEFIK_SENAICIMATEC_KEY
+      - source: TRAEFIK_SENAI_CIMATEC_KEY
         target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.key
       - source: TRAEFIK_JBTH_CRT
         target: /etc/traefik/certs/jbth/full_chain_jbth.crt
       - source: TRAEFIK_JBTH_KEY
         target: /etc/traefik/certs/jbth/jbth.com.br.key
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT
+      - source: TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT
         target: /etc/traefik/certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY
+      - source: TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY
         target: /etc/traefik/certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
-    logging: *logging
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
       interval: 30s
@@ -66,36 +59,40 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-    labels:
-      - "traefik.enable=true"
-      - "traefik.swarm.network=swarm-net"
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=swarm-net"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
 
-      ## Dashboard
-      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.tls=true"
-      - "traefik.http.routers.dashboard.middlewares=basic-auth@file"
+        ## Dashboard
+        - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+        - "traefik.http.routers.dashboard.entrypoints=websecure"
+        - "traefik.http.routers.dashboard.service=api@internal"
+        - "traefik.http.routers.dashboard.tls=true"
+        - "traefik.http.routers.dashboard.middlewares=basic-auth@swarm"
 
-      ## Metrics
-      - "traefik.http.routers.metrics.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && PathPrefix(`/metrics`)"
-      - "traefik.http.routers.metrics.entrypoints=websecure"
-      - "traefik.http.routers.metrics.service=prometheus@internal"
-      - "traefik.http.routers.metrics.tls=true"
-      - "traefik.http.routers.metrics.middlewares=basic-auth@file"
+        ## Metrics
+        - "traefik.http.routers.metrics.rule=Host(`${TRAEFIK_HOST:-traefik.localhost}`) && PathPrefix(`/metrics`)"
+        - "traefik.http.routers.metrics.entrypoints=websecure"
+        - "traefik.http.routers.metrics.service=prometheus@internal"
+        - "traefik.http.routers.metrics.tls=true"
+        - "traefik.http.routers.metrics.middlewares=basic-auth@swarm"
+
+        ## Middlewares
+        - "traefik.http.middlewares.basic-auth.basicauth.usersFile=/etc/traefik/secrets/credentials"
 
 secrets:
-  TRAEFIK_SENAICIMATEC_CRT:
+  TRAEFIK_SENAI_CIMATEC_CRT:
     external: true
-  TRAEFIK_SENAICIMATEC_KEY:
+  TRAEFIK_SENAI_CIMATEC_KEY:
     external: true
   TRAEFIK_JBTH_CRT:
     external: true
   TRAEFIK_JBTH_KEY:
     external: true
-  TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT:
+  TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT:
     external: true
-  TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY:
+  TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY:
     external: true
   TRAEFIK_CREDENTIALS:
     external: true

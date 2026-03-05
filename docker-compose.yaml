@@ -1,4 +1,6 @@
 networks:
+  web:
+    driver: bridge
   swarm-net:
     external: true
     name: swarm-net
@@ -10,8 +12,14 @@ services:
     env_file:
       - .env
     ports:
-      - "80:80"
-      - "443:443"
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: host
     volumes:
       - ./config/traefik.yaml:/etc/traefik/traefik.yaml
       - ./config/dynamic.yaml:/etc/traefik/dynamic.yaml
@@ -19,31 +27,17 @@ services:
     secrets:
       - source: TRAEFIK_CREDENTIALS
         target: /etc/traefik/secrets/credentials
-      - source: TRAEFIK_SENAICIMATEC_CRT
+      - source: TRAEFIK_SENAI_CIMATEC_CRT
         target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.pem
-      - source: TRAEFIK_SENAICIMATEC_KEY
+      - source: TRAEFIK_SENAI_CIMATEC_KEY
         target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.key
       - source: TRAEFIK_JBTH_CRT
         target: /etc/traefik/certs/jbth/full_chain_jbth.crt
       - source: TRAEFIK_JBTH_KEY
         target: /etc/traefik/certs/jbth/jbth.com.br.key
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT
+      - source: TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT
         target: /etc/traefik/certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY
-        target: /etc/traefik/certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
-      - source: TRAEFIK_CREDENTIALS
-        target: /etc/traefik/secrets/credentials
-      - source: TRAEFIK_SENAICIMATEC_CRT
-        target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.pem
-      - source: TRAEFIK_SENAICIMATEC_KEY
-        target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.key
-      - source: TRAEFIK_JBTH_CRT
-        target: /etc/traefik/certs/jbth/full_chain_jbth.crt
-      - source: TRAEFIK_JBTH_KEY
-        target: /etc/traefik/certs/jbth/jbth.com.br.key
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT
-        target: /etc/traefik/certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY
+      - source: TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY
         target: /etc/traefik/certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
     networks:
       - web
@@ -59,7 +53,7 @@ services:
       retries: 3
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=swarm-net"
+      - "traefik.docker.network=web"
 
       ## Dashboard
       - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
@@ -76,17 +70,17 @@ services:
       - "traefik.http.routers.metrics.middlewares=basic-auth@file"
 
 secrets:
-  TRAEFIK_SENAICIMATEC_CRT:
+  TRAEFIK_SENAI_CIMATEC_CRT:
     file: ./certs/senaicimatec_com_br/senaicimatec_com_br.pem
-  TRAEFIK_SENAICIMATEC_KEY:
+  TRAEFIK_SENAI_CIMATEC_KEY:
     file: ./certs/senaicimatec_com_br/senaicimatec_com_br.key
   TRAEFIK_JBTH_CRT:
     file: ./certs/jbth/full_chain_jbth.crt
   TRAEFIK_JBTH_KEY:
     file: ./certs/jbth/jbth.com.br.key
-  TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT:
+  TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT:
     file: ./certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-  TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY:
+  TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY:
     file: ./certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
   TRAEFIK_CREDENTIALS:
     file: ./config/credentials

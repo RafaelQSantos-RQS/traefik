@@ -13,13 +13,15 @@ CERTS_FOLDER            = ./certs
 EXTERNAL_DOCKER_NETWORK ?= web
 DYNAMIC_FILE            = $(CONFIG_FOLDER)/dynamic.yaml
 TRAEFIK_FILE            = $(CONFIG_FOLDER)/traefik.yaml
+SWARM_DYNAMIC_FILE     = $(CONFIG_FOLDER)/dynamic-swarm.yaml
+SWARM_TRAEFIK_FILE     = $(CONFIG_FOLDER)/traefik-swarm.yaml
 CREDENTIALS_SECRET      = TRAEFIK_CREDENTIALS
 TRAEFIK_STATIC_CONFIG   = TRAEFIK_STATIC
 TRAEFIK_DYNAMIC_CONFIG  = TRAEFIK_DYNAMIC
 
 LOG = @echo "[$$(date '+%Y-%m-%d %H:%M:%S')]"
 
-.PHONY: help setup compose-up compose-down compose-restart compose-logs compose-status compose-pull \
+.PHONY: help setup compose-setup swarm-setup compose-up compose-down compose-restart compose-logs compose-status compose-pull \
 	add-user update-user delete-user list-users \
 	swarm-create-configs swarm-create-secrets swarm-update-configs swarm-update-secrets \
 	swarm-remove-configs swarm-remove-secrets swarm-check-configs swarm-check-secrets \
@@ -67,6 +69,48 @@ setup: ## 🛠️ Generate environment and config files from templates
 	@$(MAKE) _create-network-if-not-exists
 
 	$(LOG) "Environment and config files generated"
+
+compose-setup: ## ⚙️ Generate Docker Compose config files (traefik.yaml + dynamic.yaml)
+	$(LOG) "Creating folder $(CONFIG_FOLDER)"
+	@mkdir -p $(CONFIG_FOLDER)
+
+	@if [ ! -f $(TRAEFIK_FILE) ]; then \
+		$(LOG) "Generating traefik.yaml from template"; \
+		cp templates/traefik.yaml.template $(TRAEFIK_FILE); \
+	else \
+		$(LOG) "$(TRAEFIK_FILE) already exists, skipping"; \
+	fi
+
+	@if [ ! -f $(DYNAMIC_FILE) ]; then \
+		$(LOG) "Generating dynamic.yaml from template"; \
+		cp templates/dynamic.yaml.template $(DYNAMIC_FILE); \
+	else \
+		$(LOG) "$(DYNAMIC_FILE) already exists, skipping"; \
+	fi
+
+	@$(MAKE) _create-network-if-not-exists
+
+	$(LOG) "Docker Compose config files generated"
+
+swarm-setup: ## 🐳 Generate Docker Swarm config files (traefik-swarm.yaml + dynamic-swarm.yaml)
+	$(LOG) "Creating folder $(CONFIG_FOLDER)"
+	@mkdir -p $(CONFIG_FOLDER)
+
+	@if [ ! -f $(SWARM_TRAEFIK_FILE) ]; then \
+		$(LOG) "Generating traefik-swarm.yaml from template"; \
+		cp templates/traefik-swarm.yaml.template $(SWARM_TRAEFIK_FILE); \
+	else \
+		$(LOG) "$(SWARM_TRAEFIK_FILE) already exists, skipping"; \
+	fi
+
+	@if [ ! -f $(SWARM_DYNAMIC_FILE) ]; then \
+		$(LOG) "Generating dynamic-swarm.yaml from template"; \
+		cp templates/dynamic-swarm.yaml.template $(SWARM_DYNAMIC_FILE); \
+	else \
+		$(LOG) "$(SWARM_DYNAMIC_FILE) already exists, skipping"; \
+	fi
+
+	$(LOG) "Docker Swarm config files generated"
 
 _create-network-if-not-exists:
 	$(LOG) "Checking for network $(EXTERNAL_DOCKER_NETWORK)..."
@@ -150,60 +194,60 @@ swarm-create-configs: ## 🐳 Create Docker Swarm configs for Traefik YAML files
 	$(LOG) "Creating Docker Swarm configs..."
 	@docker config rm $(TRAEFIK_STATIC_CONFIG) 2>/dev/null || true
 	@docker config rm $(TRAEFIK_DYNAMIC_CONFIG) 2>/dev/null || true
-	@docker config create $(TRAEFIK_STATIC_CONFIG) $(TRAEFIK_FILE)
-	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(DYNAMIC_FILE)
+	@docker config create $(TRAEFIK_STATIC_CONFIG) $(SWARM_TRAEFIK_FILE) >/dev/null 2>&1
+	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(SWARM_DYNAMIC_FILE) >/dev/null 2>&1
 	$(LOG) "Traefik configs created successfully"
 
 swarm-create-secrets: ## 🔐 Create all Docker Swarm secrets (credentials + certs)
 	$(LOG) "Creating Docker Swarm secrets..."
-	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
-	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials
+	@docker secret rm $(CREDENTIALS_SECRET) >/dev/null 2>&1 || true
+	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials >/dev/null 2>&1
 	$(LOG) "Credentials secret created"
-	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_SENAICIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem
-	@docker secret create TRAEFIK_SENAICIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_SENAI_CIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem >/dev/null 2>&1
+	@docker secret create TRAEFIK_SENAI_CIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key >/dev/null 2>&1
 	$(LOG) "Senaicimatec certs secrets created"
-	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt
-	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key
+	@docker secret rm TRAEFIK_JBTH_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_JBTH_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt >/dev/null 2>&1
+	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key >/dev/null 2>&1
 	$(LOG) "JBTH certs secrets created"
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
-	$(LOG) "Universidadecerts secrets created"
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem >/dev/null 2>&1
+	@docker secret create TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key >/dev/null 2>&1
+	$(LOG) "Uni secrets created"
 	$(LOG) "All secrets created successfully"
 
 swarm-update-configs: ## 🔄 Update existing Docker Swarm configs
 	$(LOG) "Updating Docker Swarm configs..."
 	@docker config rm $(TRAEFIK_STATIC_CONFIG) 2>/dev/null || true
 	@docker config rm $(TRAEFIK_DYNAMIC_CONFIG) 2>/dev/null || true
-	@docker config create $(TRAEFIK_STATIC_CONFIG) $(TRAEFIK_FILE)
-	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(DYNAMIC_FILE)
+	@docker config create $(TRAEFIK_STATIC_CONFIG) $(SWARM_TRAEFIK_FILE) >/dev/null 2>&1
+	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(SWARM_DYNAMIC_FILE) >/dev/null 2>&1
 	$(LOG) "Traefik configs updated successfully"
 	$(LOG) "Restart Traefik to apply changes: make swarm-deploy"
 
 swarm-update-secrets: ## 🔄 Update all Docker Swarm secrets (credentials + certs)
 	$(LOG) "Updating Docker Swarm secrets..."
-	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
-	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials
+	@docker secret rm $(CREDENTIALS_SECRET) >/dev/null 2>&1 || true
+	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials >/dev/null 2>&1
 	$(LOG) "Credentials secret updated"
-	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_SENAICIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem
-	@docker secret create TRAEFIK_SENAICIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_SENAI_CIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem >/dev/null 2>&1
+	@docker secret create TRAEFIK_SENAI_CIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key >/dev/null 2>&1
 	$(LOG) "Senaicimatec certs secrets updated"
-	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt
-	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key
+	@docker secret rm TRAEFIK_JBTH_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_JBTH_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt >/dev/null 2>&1
+	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key >/dev/null 2>&1
 	$(LOG) "JBTH certs secrets updated"
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
-	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
-	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT >/dev/null 2>&1 || true
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY >/dev/null 2>&1 || true
+	@docker secret create TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem >/dev/null 2>&1
+	@docker secret create TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key >/dev/null 2>&1
 	$(LOG) "Universidadecerts secrets updated"
 	$(LOG) "All secrets updated successfully"
 	$(LOG) "Restart Traefik to apply changes: make swarm-deploy"
@@ -217,12 +261,11 @@ swarm-remove-configs: ## 🗑️ Remove Docker Swarm configs
 swarm-remove-secrets: ## 🗑️ Remove all Docker Swarm secrets
 	$(LOG) "Removing Docker Swarm secrets..."
 	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
-	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_KEY 2>/dev/null || true
 	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
 	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
-	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY 2>/dev/null || true
 	$(LOG) "All secrets removed"
 
 swarm-check-configs: ## 🔍 Check if Docker Swarm configs exist
@@ -240,7 +283,7 @@ swarm-check-configs: ## 🔍 Check if Docker Swarm configs exist
 
 swarm-check-secrets: ## 🔍 Check if Docker Swarm secrets exist
 	@echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Checking Docker Swarm secrets..."
-	@for secret in $(CREDENTIALS_SECRET) TRAEFIK_SENAICIMATEC_CRT TRAEFIK_SENAICIMATEC_KEY TRAEFIK_JBTH_CRT TRAEFIK_JBTH_KEY TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY; do \
+	@for secret in $(CREDENTIALS_SECRET) TRAEFIK_SENAI_CIMATEC_CRT TRAEFIK_SENAI_CIMATEC_KEY TRAEFIK_JBTH_CRT TRAEFIK_JBTH_KEY TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_CRT TRAEFIK_UNIVERSIDADE_SENAI_CIMATEC_KEY; do \
 		if docker secret ls | grep -q $$secret; then \
 			echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $$secret exists"; \
 		else \
@@ -278,8 +321,10 @@ help: ## 🤔 Show this help message
 	@echo ""
 	@echo "  📋  GENERAL"
 	@echo "  ────────────────────────────────────────────────────────────────────"
-	@echo "    make setup                 Generate environment and config files"
-	@echo "    make sync                  Sync with remote 'main' branch"
+	@echo "    make setup             Generate environment and all config files"
+	@echo "    make compose-setup     Generate Docker Compose config files only"
+	@echo "    make swarm-setup       Generate Docker Swarm config files only"
+	@echo "    make sync              Sync with remote 'main' branch"
 	@echo ""
 	@echo "  👥  USERS"
 	@echo "  ────────────────────────────────────────────────────────────────────"
