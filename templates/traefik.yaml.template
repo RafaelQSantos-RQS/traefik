@@ -21,7 +21,6 @@ providers:
 api:
   dashboard: true
   debug: false
-  disabledashboardad: false
   insecure: false
 
 ping:

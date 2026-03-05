@@ -947,7 +947,7 @@ services:
   meu-servico:
     image: nginx:latest
     networks:
-      - traefik-web  # Rede overlay do Swarm
+      - swarm-net  # Rede overlay do Swarm
     deploy:
       labels:
         traefik.enable: "true"
@@ -998,7 +998,7 @@ networks:
 ```bash
 # Usar a rede overlay
 networks:
-  - traefik-web
+  - swarm-net
 ```
 
 ---

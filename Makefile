@@ -261,6 +261,7 @@ swarm-remove-configs: ## 🗑️ Remove Docker Swarm configs
 swarm-remove-secrets: ## 🗑️ Remove all Docker Swarm secrets
 	$(LOG) "Removing Docker Swarm secrets..."
 	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAI_CIMATEC_CRT 2>/dev/null || true
 	@docker secret rm TRAEFIK_SENAI_CIMATEC_KEY 2>/dev/null || true
 	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
 	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
