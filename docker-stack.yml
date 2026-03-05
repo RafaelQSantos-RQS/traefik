@@ -29,7 +29,7 @@ services:
       - source: TRAEFIK_DYNAMIC
         target: /etc/traefik/dynamic.yaml
     networks:
-      - web
+      - swarm-net
     secrets:
       - source: TRAEFIK_CREDENTIALS
         target: /etc/traefik/secrets/credentials

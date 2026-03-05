@@ -59,7 +59,7 @@ services:
       retries: 3
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=${EXTERNAL_DOCKER_NETWORK}"
+      - "traefik.docker.network=swarm-net"
 
       ## Dashboard
       - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
