@@ -5,15 +5,25 @@ ifneq (,$(wildcard ./.env))
 	export
 endif
 
-COMPOSE        = docker compose
-ENV_FILE       = .env
-ENV_TEMPLATE   = .env.template
-CONFIG_FOLDER  = ./config
+COMPOSE                 = docker compose
+ENV_FILE                = .env
+ENV_TEMPLATE            = .env.template
+CONFIG_FOLDER           = ./config
+CERTS_FOLDER            = ./certs
 EXTERNAL_DOCKER_NETWORK ?= web
-DYNAMIC_FILE   = $(CONFIG_FOLDER)/dynamic.yaml
-TRAEFIK_FILE   = $(CONFIG_FOLDER)/traefik.yaml
+DYNAMIC_FILE            = $(CONFIG_FOLDER)/dynamic.yaml
+TRAEFIK_FILE            = $(CONFIG_FOLDER)/traefik.yaml
+CREDENTIALS_SECRET      = TRAEFIK_CREDENTIALS
+TRAEFIK_STATIC_CONFIG   = TRAEFIK_STATIC
+TRAEFIK_DYNAMIC_CONFIG  = TRAEFIK_DYNAMIC
 
-.PHONY: setup up down restart logs status pull help clean _create-network-if-not-exists sync add-user update-user delete-user list-users deploy-stack remove-stack stack-status stack-logs
+LOG = @echo "[$$(date '+%Y-%m-%d %H:%M:%S')]"
+
+.PHONY: help setup compose-up compose-down compose-restart compose-logs compose-status compose-pull \
+	add-user update-user delete-user list-users \
+	swarm-create-configs swarm-create-secrets swarm-update-configs swarm-update-secrets \
+	swarm-remove-configs swarm-remove-secrets swarm-check-configs swarm-check-secrets \
+	swarm-deploy swarm-remove swarm-status swarm-logs sync
 
 setup: ## 🛠️ Generate environment and config files from templates
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -32,131 +42,279 @@ setup: ## 🛠️ Generate environment and config files from templates
 		echo "==> $(ENV_FILE) already exists"; \
 	fi
 
-	@echo "==> Creating folder $(CONFIG_FOLDER)"
+	$(LOG) "Creating folder $(CONFIG_FOLDER)"
 	@mkdir -p $(CONFIG_FOLDER)
 
 	@if [ ! -f $(TRAEFIK_FILE) ]; then \
-		echo "==> Generating traefik.yaml from template"; \
+		$(LOG) "Generating traefik.yaml from template"; \
 		cp templates/traefik.yaml.template $(TRAEFIK_FILE); \
 	else \
-		echo "==> $(TRAEFIK_FILE) already exists, skipping"; \
+		$(LOG) "$(TRAEFIK_FILE) already exists, skipping"; \
 	fi
 
 	@if [ ! -f $(CONFIG_FOLDER)/credentials ]; then \
-		echo "==> Generating credentials file"; \
+		$(LOG) "Generating credentials file"; \
 		if [ -z "$$DASH_USER" ] || [ -z "$$DASH_PASS" ]; then \
-			echo "❌ DASH_USER or DASH_PASS not set in $(ENV_FILE). Please configure and run 'make setup' again."; \
+			$(LOG) "DASH_USER or DASH_PASS not set in $(ENV_FILE). Please configure and run 'make setup' again."; \
 			exit 1; \
 		fi; \
 		htpasswd -nbm $$DASH_USER $$DASH_PASS > $(CONFIG_FOLDER)/credentials; \
-		echo "✅ New credentials file generated at $(CONFIG_FOLDER)/credentials"; \
+		$(LOG) "New credentials file generated at $(CONFIG_FOLDER)/credentials"; \
 	else \
-		echo "==> $(CONFIG_FOLDER)/credentials already exists, skipping"; \
+		$(LOG) "$(CONFIG_FOLDER)/credentials already exists, skipping"; \
 	fi
 
 	@$(MAKE) _create-network-if-not-exists
 
-	@echo "✅ Environment and config files generated at $(ENV_FILE), $(TRAEFIK_FILE) and $(DYNAMIC_FILE)"
+	$(LOG) "Environment and config files generated"
 
 _create-network-if-not-exists:
-	@echo "==> Checking for network $(EXTERNAL_DOCKER_NETWORK)..."
+	$(LOG) "Checking for network $(EXTERNAL_DOCKER_NETWORK)..."
 	@docker network inspect $(EXTERNAL_DOCKER_NETWORK) >/dev/null 2>&1 || \
-		(echo "==> Network $(EXTERNAL_DOCKER_NETWORK) not found. Creating..." && docker network create $(EXTERNAL_DOCKER_NETWORK))
-	@echo "✅ Network $(EXTERNAL_DOCKER_NETWORK) is ready."
-
-sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
-	@echo "==> Syncing with the remote repository (origin/main)..."
-	@git fetch origin
-	@git reset --hard origin/main
-	@echo "Sync completed. Directory is clean and up-to-date."
-
-up: ## 🚀 Start containers
-	@$(COMPOSE) --env-file $(ENV_FILE) up -d --remove-orphans
-
-down: ## 🛑 Stop containers
-	@$(COMPOSE) --env-file $(ENV_FILE) down
-
-restart: down up ## 🔄 Restart containers
-
-logs: ## 📜 Show logs in real time
-	@$(COMPOSE) --env-file $(ENV_FILE) logs -f
-
-status: ## 📊 Show container status
-	@$(COMPOSE) --env-file $(ENV_FILE) ps
-
-pull: ## 📦 Pull the latest images
-	@$(COMPOSE) pull
+		($(LOG) "Network $(EXTERNAL_DOCKER_NETWORK) not found. Creating..." && docker network create --attachable $(EXTERNAL_DOCKER_NETWORK))
+	$(LOG) "Network $(EXTERNAL_DOCKER_NETWORK) is ready."
 
 add-user: ## ➕ Add a new user to credentials file
 	@if [ -z "$(USERNAME)" ] || [ -z "$(PASS)" ]; then \
-		echo "❌ Usage: make add-user USERNAME=username PASS=password"; \
+		$(LOG) "Usage: make add-user USERNAME=username PASS=password"; \
 		exit 1; \
 	fi
-	@echo "==> Adding user $(USERNAME) to credentials file"
+	$(LOG) "Adding user $(USERNAME) to credentials file"
 	@htpasswd -nbm $(USERNAME) $(PASS) | tr -d '\n' >> $(CONFIG_FOLDER)/credentials
 	@echo "" >> $(CONFIG_FOLDER)/credentials
-	@echo "✅ User $(USERNAME) added successfully"
-	@echo "⚠️ Restart Traefik to apply changes: make restart"
+	$(LOG) "User $(USERNAME) added successfully"
+	$(LOG) "Restart Traefik to apply changes: make compose-restart"
 
 update-user: ## 🔄 Update password for an existing user
 	@if [ -z "$(USERNAME)" ] || [ -z "$(PASS)" ]; then \
-		echo "❌ Usage: make update-user USERNAME=username PASS=newpassword"; \
+		$(LOG) "Usage: make update-user USERNAME=username PASS=newpassword"; \
 		exit 1; \
 	fi
 	@if ! grep -q "^$(USERNAME):" $(CONFIG_FOLDER)/credentials; then \
-		echo "❌ User $(USERNAME) not found"; \
+		$(LOG) "User $(USERNAME) not found"; \
 		exit 1; \
 	fi
-	@echo "==> Updating password for user $(USERNAME)"
+	$(LOG) "Updating password for user $(USERNAME)"
 	@sed -i "/^$(USERNAME):/d" $(CONFIG_FOLDER)/credentials
 	@htpasswd -nbm $(USERNAME) $(PASS) | tr -d '\n' >> $(CONFIG_FOLDER)/credentials
 	@echo "" >> $(CONFIG_FOLDER)/credentials
-	@echo "✅ Password for user $(USERNAME) updated successfully"
-	@echo "⚠️ Restart Traefik to apply changes: make restart"
+	$(LOG) "Password for user $(USERNAME) updated successfully"
+	$(LOG) "Restart Traefik to apply changes: make compose-restart"
 
 delete-user: ## 🗑️ Delete a user from credentials file
 	@if [ -z "$(USERNAME)" ]; then \
-		echo "❌ Usage: make delete-user USERNAME=username"; \
+		$(LOG) "Usage: make delete-user USERNAME=username"; \
 		exit 1; \
 	fi
 	@if ! grep -q "^$(USERNAME):" $(CONFIG_FOLDER)/credentials; then \
-		echo "❌ User $(USERNAME) not found"; \
+		$(LOG) "User $(USERNAME) not found"; \
 		exit 1; \
 	fi
-	@echo "==> Deleting user $(USERNAME)"
+	$(LOG) "Deleting user $(USERNAME)"
 	@sed -i "/^$(USERNAME):/d" $(CONFIG_FOLDER)/credentials
-	@echo "✅ User $(USERNAME) deleted successfully"
-	@echo "⚠️ Restart Traefik to apply changes: make restart"
+	$(LOG) "User $(USERNAME) deleted successfully"
+	$(LOG) "Restart Traefik to apply changes: make compose-restart"
 
 list-users: ## 👥 List all users in credentials file
 	@if [ ! -f $(CONFIG_FOLDER)/credentials ]; then \
-		echo "❌ Credentials file not found"; \
+		$(LOG) "Credentials file not found"; \
 		exit 1; \
 	fi
-	@echo "==> Users in credentials file:"
+	$(LOG) "Users in credentials file:"
 	@cut -d: -f1 $(CONFIG_FOLDER)/credentials | grep -v '^$$' | sed 's/^/  - /'
 
-deploy-stack: ## 🐳 Deploy Traefik to Docker Swarm
-	@echo "==> Deploying Traefik to Swarm..."
-	@docker stack deploy -c docker-stack.yml traefik
-	@echo "✅ Traefik deployed to Swarm"
+compose-up: ## 🚀 Start containers (Docker Compose)
+	$(LOG) "Starting containers..."
+	@$(COMPOSE) --env-file $(ENV_FILE) up -d --remove-orphans
+	$(LOG) "Containers started"
 
-remove-stack: ## 🗑️ Remove Traefik from Docker Swarm
-	@echo "==> Removing Traefik from Swarm..."
+compose-down: ## 🛑 Stop containers (Docker Compose)
+	$(LOG) "Stopping containers..."
+	@$(COMPOSE) --env-file $(ENV_FILE) down
+	$(LOG) "Containers stopped"
+
+compose-restart: compose-down compose-up ## 🔄 Restart containers (Docker Compose)
+
+compose-logs: ## 📜 Show logs in real time (Docker Compose)
+	@$(COMPOSE) --env-file $(ENV_FILE) logs -f
+
+compose-status: ## 📊 Show container status (Docker Compose)
+	@$(COMPOSE) --env-file $(ENV_FILE) ps
+
+compose-pull: ## 📦 Pull the latest images (Docker Compose)
+	$(LOG) "Pulling latest images..."
+	@$(COMPOSE) pull
+	$(LOG) "Images pulled"
+
+swarm-create-configs: ## 🐳 Create Docker Swarm configs for Traefik YAML files
+	$(LOG) "Creating Docker Swarm configs..."
+	@docker config rm $(TRAEFIK_STATIC_CONFIG) 2>/dev/null || true
+	@docker config rm $(TRAEFIK_DYNAMIC_CONFIG) 2>/dev/null || true
+	@docker config create $(TRAEFIK_STATIC_CONFIG) $(TRAEFIK_FILE)
+	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(DYNAMIC_FILE)
+	$(LOG) "Traefik configs created successfully"
+
+swarm-create-secrets: ## 🔐 Create all Docker Swarm secrets (credentials + certs)
+	$(LOG) "Creating Docker Swarm secrets..."
+	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
+	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials
+	$(LOG) "Credentials secret created"
+	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_SENAICIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem
+	@docker secret create TRAEFIK_SENAICIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key
+	$(LOG) "Senaicimatec certs secrets created"
+	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt
+	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key
+	$(LOG) "JBTH certs secrets created"
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
+	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
+	$(LOG) "Universidadecerts secrets created"
+	$(LOG) "All secrets created successfully"
+
+swarm-update-configs: ## 🔄 Update existing Docker Swarm configs
+	$(LOG) "Updating Docker Swarm configs..."
+	@docker config rm $(TRAEFIK_STATIC_CONFIG) 2>/dev/null || true
+	@docker config rm $(TRAEFIK_DYNAMIC_CONFIG) 2>/dev/null || true
+	@docker config create $(TRAEFIK_STATIC_CONFIG) $(TRAEFIK_FILE)
+	@docker config create $(TRAEFIK_DYNAMIC_CONFIG) $(DYNAMIC_FILE)
+	$(LOG) "Traefik configs updated successfully"
+	$(LOG) "Restart Traefik to apply changes: make swarm-deploy"
+
+swarm-update-secrets: ## 🔄 Update all Docker Swarm secrets (credentials + certs)
+	$(LOG) "Updating Docker Swarm secrets..."
+	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
+	@docker secret create $(CREDENTIALS_SECRET) $(CONFIG_FOLDER)/credentials
+	$(LOG) "Credentials secret updated"
+	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_SENAICIMATEC_CRT certs/senaicimatec_com_br/senaicimatec_com_br.pem
+	@docker secret create TRAEFIK_SENAICIMATEC_KEY certs/senaicimatec_com_br/senaicimatec_com_br.key
+	$(LOG) "Senaicimatec certs secrets updated"
+	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_JBTH_CRT certs/jbth/full_chain_jbth.crt
+	@docker secret create TRAEFIK_JBTH_KEY certs/jbth/jbth.com.br.key
+	$(LOG) "JBTH certs secrets updated"
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
+	@docker secret create TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
+	$(LOG) "Universidadecerts secrets updated"
+	$(LOG) "All secrets updated successfully"
+	$(LOG) "Restart Traefik to apply changes: make swarm-deploy"
+
+swarm-remove-configs: ## 🗑️ Remove Docker Swarm configs
+	$(LOG) "Removing Docker Swarm configs..."
+	@docker config rm $(TRAEFIK_STATIC_CONFIG) 2>/dev/null || true
+	@docker config rm $(TRAEFIK_DYNAMIC_CONFIG) 2>/dev/null || true
+	$(LOG) "Traefik configs removed"
+
+swarm-remove-secrets: ## 🗑️ Remove all Docker Swarm secrets
+	$(LOG) "Removing Docker Swarm secrets..."
+	@docker secret rm $(CREDENTIALS_SECRET) 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_SENAICIMATEC_KEY 2>/dev/null || true
+	@docker secret rm TRAEFIK_JBTH_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_JBTH_KEY 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT 2>/dev/null || true
+	@docker secret rm TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY 2>/dev/null || true
+	$(LOG) "All secrets removed"
+
+swarm-check-configs: ## 🔍 Check if Docker Swarm configs exist
+	@echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Checking Docker Swarm configs..."
+	@if docker config ls | grep -q $(TRAEFIK_STATIC_CONFIG); then \
+		echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $(TRAEFIK_STATIC_CONFIG) exists"; \
+	else \
+		echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $(TRAEFIK_STATIC_CONFIG) does not exist"; \
+	fi
+	@if docker config ls | grep -q $(TRAEFIK_DYNAMIC_CONFIG); then \
+		echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $(TRAEFIK_DYNAMIC_CONFIG) exists"; \
+	else \
+		echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $(TRAEFIK_DYNAMIC_CONFIG) does not exist"; \
+	fi
+
+swarm-check-secrets: ## 🔍 Check if Docker Swarm secrets exist
+	@echo "[$$(date '+%Y-%m-%d %H:%M:%S')] Checking Docker Swarm secrets..."
+	@for secret in $(CREDENTIALS_SECRET) TRAEFIK_SENAICIMATEC_CRT TRAEFIK_SENAICIMATEC_KEY TRAEFIK_JBTH_CRT TRAEFIK_JBTH_KEY TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY; do \
+		if docker secret ls | grep -q $$secret; then \
+			echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $$secret exists"; \
+		else \
+			echo "[$$(date '+%Y-%m-%d %H:%M:%S')] $$secret does not exist"; \
+		fi \
+	done
+
+swarm-deploy: swarm-check-configs swarm-check-secrets ## 🐳 Deploy Traefik to Docker Swarm
+	$(LOG) "Deploying Traefik to Swarm..."
+	@export $$(cat $(ENV_FILE) | xargs) && docker stack deploy -c docker-stack.yml traefik
+	$(LOG) "Traefik deployed to Swarm"
+
+swarm-remove: ## 🗑️ Remove Traefik from Docker Swarm
+	$(LOG) "Removing Traefik from Swarm..."
 	@docker stack rm traefik
-	@echo "✅ Traefik removed from Swarm"
+	$(LOG) "Traefik removed from Swarm"
 
-stack-status: ## 📊 Show Traefik stack status
+swarm-status: ## 📊 Show Traefik stack status
 	@docker stack ps traefik
 
-stack-logs: ## 📜 Show Traefik Swarm logs
+swarm-logs: ## 📜 Show Traefik Swarm logs
 	@docker stack logs -f traefik
+
+sync: ## 🔄 Syncs the local code with the remote 'main' branch (discards local changes!).
+	$(LOG) "Syncing with the remote repository (origin/main)..."
+	@git fetch origin
+	@git reset --hard origin/main
+	$(LOG) "Sync completed. Directory is clean and up-to-date."
 
 help: ## 🤔 Show this help message
 	@echo ""
-	@echo "Traefik Management"
-	@echo "=================="
-	@grep -h -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort \
-	| sed 's/:.*## /: /' \
-	| awk 'BEGIN {FS = ": "}; {printf "  %-12s %s\n", $$1, $$2}'
+	@echo "  ╔══════════════════════════════════════════════════════════════════╗"
+	@echo "  ║                     TRAEFIK MANAGEMENT                           ║"
+	@echo "  ╚══════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "  📋  GENERAL"
+	@echo "  ────────────────────────────────────────────────────────────────────"
+	@echo "    make setup                 Generate environment and config files"
+	@echo "    make sync                  Sync with remote 'main' branch"
+	@echo ""
+	@echo "  👥  USERS"
+	@echo "  ────────────────────────────────────────────────────────────────────"
+	@echo "    make add-user              Add a new user to credentials"
+	@echo "    make update-user           Update password for existing user"
+	@echo "    make delete-user           Delete a user from credentials"
+	@echo "    make list-users            List all users in credentials"
+	@echo ""
+	@echo "  🐳  DOCKER COMPOSE"
+	@echo "  ────────────────────────────────────────────────────────────────────"
+	@echo "    make compose-up            Start containers"
+	@echo "    make compose-down          Stop containers"
+	@echo "    make compose-restart       Restart containers"
+	@echo "    make compose-logs          Show logs in real time"
+	@echo "    make compose-status        Show container status"
+	@echo "    make compose-pull          Pull the latest images"
+	@echo ""
+	@echo "  ☁️  DOCKER SWARM"
+	@echo "  ────────────────────────────────────────────────────────────────────"
+	@echo "    make swarm-deploy          Deploy Traefik to Swarm"
+	@echo "    make swarm-remove          Remove Traefik from Swarm"
+	@echo "    make swarm-status          Show stack status"
+	@echo "    make swarm-logs            Show Swarm logs"
+	@echo "    make swarm-create-configs  Create configs (traefik.yaml/dynamic.yaml)"
+	@echo "    make swarm-create-secrets  Create all secrets (credentials + certs)"
+	@echo "    make swarm-update-configs  Update existing configs"
+	@echo "    make swarm-update-secrets  Update all secrets (credentials + certs)"
+	@echo "    make swarm-remove-configs  Remove configs"
+	@echo "    make swarm-remove-secrets  Remove all secrets"
+	@echo "    make swarm-check-configs  Check if configs exist"
+	@echo "    make swarm-check-secrets  Check if secrets exist"
+	@echo ""
+	@echo "  ────────────────────────────────────────────────────────────────────"
+	@echo "  Examples:"
+	@echo "    make add-user USERNAME=admin PASS=mypassword"
+	@echo "    make update-user USERNAME=admin PASS=newpassword"
+	@echo "    make delete-user USERNAME=admin"
 	@echo ""

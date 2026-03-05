@@ -4,17 +4,17 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
-# Required network: docker network create -d overlay traefik-web --attachable
 networks:
   web:
     external: true
-    name: ${EXTERNAL_DOCKER_NETWORK:-traefik-web}
+    name: swarm-net
 
 services:
   proxy:
     image: traefik:${TRAEFIK_VERSION:-v3.6.9}
     environment:
       - TRAEFIK_VERSION=${TRAEFIK_VERSION:-v3.6.9}
+      - TRAEFIK_HOST=${TRAEFIK_HOST:-traefik.localhost}
     ports:
       - target: 80
         published: 80
@@ -23,13 +23,29 @@ services:
         published: 443
         protocol: tcp
     volumes:
-      - ./config/traefik-swarm.yaml:/etc/traefik/traefik.yaml:ro
-      - ./config/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
-      - ./config/credentials:/etc/traefik/secrets/credentials:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${CERTS_DIR:-./certs}:/etc/traefik/certs:ro
+    configs:
+      - source: TRAEFIK_STATIC
+        target: /etc/traefik/traefik.yaml
+      - source: TRAEFIK_DYNAMIC
+        target: /etc/traefik/dynamic.yaml
     networks:
       - web
+    secrets:
+      - source: TRAEFIK_CREDENTIALS
+        target: /etc/traefik/secrets/credentials
+      - source: TRAEFIK_SENAICIMATEC_CRT
+        target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.pem
+      - source: TRAEFIK_SENAICIMATEC_KEY
+        target: /etc/traefik/certs/senaicimatec_com_br/senaicimatec_com_br.key
+      - source: TRAEFIK_JBTH_CRT
+        target: /etc/traefik/certs/jbth/full_chain_jbth.crt
+      - source: TRAEFIK_JBTH_KEY
+        target: /etc/traefik/certs/jbth/jbth.com.br.key
+      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT
+        target: /etc/traefik/certs/universidadesenaicimatec_edu_br/fullchain_universidadesenaicimatec.edu.brv2.pem
+      - source: TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY
+        target: /etc/traefik/certs/universidadesenaicimatec_edu_br/universidadesenaicimatec.edu.brv2.key
     logging: *logging
     healthcheck:
       test: ["CMD", "traefik", "healthcheck"]
@@ -67,3 +83,25 @@ services:
       - "traefik.http.routers.metrics.service=prometheus@internal"
       - "traefik.http.routers.metrics.tls=true"
       - "traefik.http.routers.metrics.middlewares=basic-auth@file"
+
+secrets:
+  TRAEFIK_SENAICIMATEC_CRT:
+    external: true
+  TRAEFIK_SENAICIMATEC_KEY:
+    external: true
+  TRAEFIK_JBTH_CRT:
+    external: true
+  TRAEFIK_JBTH_KEY:
+    external: true
+  TRAEFIK_UNIVERSIDADESENAICIMATEC_CRT:
+    external: true
+  TRAEFIK_UNIVERSIDADESENAICIMATEC_KEY:
+    external: true
+  TRAEFIK_CREDENTIALS:
+    external: true
+
+configs:
+  TRAEFIK_DYNAMIC:
+    external: true
+  TRAEFIK_STATIC:
+    external: true
