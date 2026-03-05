@@ -1,7 +1,7 @@
 networks:
-  web:
+  swarm-net:
     external: true
-    name: ${EXTERNAL_DOCKER_NETWORK}
+    name: swarm-net
 
 services:
   proxy:
