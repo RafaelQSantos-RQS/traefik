@@ -749,6 +749,40 @@ tls:
 - Modificar middlewares
 - Ajustar rate-limiting
 
+### Diferenças entre traefik.yaml e traefik-swarm.yaml
+
+O projeto mantém **dois arquivos de configuração estática** para suportar os dois modos de deploy:
+
+| Aspecto | **traefik.yaml** (Compose) | **traefik-swarm.yaml** (Swarm) |
+|---------|---------------------------|------------------------------|
+| **Ubicação** | `config/traefik.yaml` | `config/traefik-swarm.yaml` |
+| **Provider** | `docker` | `swarm` |
+| **Uso** | Docker Compose (standalone) | Docker Swarm (cluster) |
+| **Service Discovery** | Via Docker API (local) | Via Docker Swarm labels |
+| **Certificados** | Volumes locais | Docker Secrets |
+| **Arquivo dinâmico** | `dynamic.yaml` | `dynamic.yaml` |
+| **Acesso socket** | `/var/run/docker.sock` | `/var/run/docker.sock` |
+
+**Provider diferenças:**
+
+**traefik.yaml (Docker Compose):**
+```yaml
+providers:
+  docker:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+```
+
+**traefik-swarm.yaml (Docker Swarm):**
+```yaml
+providers:
+  swarm:
+    endpoint: unix:///var/run/docker.sock
+    exposedByDefault: false
+```
+
+> **Nota:** A escolha do provider é a diferença crítica. Docker Compose usa `docker`, Swarm usa `swarm`. O arquivo dinâmico pode ser compartilhado entre ambos.
+
 ### Diferença entre Configs e Secrets
 
 | Aspecto | **Configs** | **Secrets** |
@@ -985,21 +1019,28 @@ traefik.http.routers.app.rule: "PathPrefix(`/api`)"
 traefik.http.routers.app.rule: "Host(`app.example.com`) && PathPrefix(`/api`)"
 ```
 
-### Conectando Serviços ao Traefik
+### Middlewares em Swarm: @file vs @swarm
 
-**Docker Compose:**
-```bash
-# Rede deve ser a mesma configurada no Traefik
-networks:
-  - web  # Ou o nome da rede configurada
+Ao usar middlewares em Docker Swarm, é importante entender a sintaxe correta:
+
+**Em Docker Compose** - Middlewares definidos em arquivo YAML (dynamic.yaml):
+```yaml
+deploy:
+  labels:
+    traefik.http.routers.app.middlewares: "basic-auth@file,rate-limit@file"
 ```
 
-**Docker Swarm:**
-```bash
-# Usar a rede overlay
-networks:
-  - swarm-net
+**Em Docker Swarm** - Middlewares definidos via deploy.labels do serviço Traefik:
+```yaml
+deploy:
+  labels:
+    traefik.http.routers.app.middlewares: "basic-auth@swarm,rate-limit@swarm"
+    traefik.http.middlewares.basic-auth.basicauth.usersFile: "/etc/traefik/secrets/credentials"
+    traefik.http.middlewares.rate-limit.ratelimit.average: "100"
+    traefik.http.middlewares.rate-limit.ratelimit.burst: "50"
 ```
+
+> **Nota:** Use `@swarm` quando o middleware é definido via labels do serviço Traefik. Use `@file` quando está definido em um arquivo YAML (dinâmico).
 
 ---
 
